@@ -5,6 +5,7 @@ import { socket } from '../utils/socket';
 import Button from '../components/Button';
 import Card from '../components/Card';
 import FeedbackGraph from '../components/FeedbackGraph';
+import WaveformPlayer from '../components/WaveformPlayer';
 
 const NarratorDashboard = () => {
     const [sessionName, setSessionName] = useState('');
@@ -15,9 +16,112 @@ const NarratorDashboard = () => {
     const [feedbackData, setFeedbackData] = useState([]);
     const [startTime, setStartTime] = useState(null);
     const [totalPausedTime, setTotalPausedTime] = useState(0);
-    const pauseStartTimeRef = useRef(null);
 
-    // Audio Refs
+    const [isReviewing, setIsReviewing] = useState(false);
+    const [audioUrl, setAudioUrl] = useState(null);
+    const [currentPlaybackTime, setCurrentPlaybackTime] = useState(0);
+    const [zoomLevel, setZoomLevel] = useState(50); // Pixels per second
+    const [duration, setDuration] = useState(0);
+
+    const playerRef = useRef(null);
+    const [isPlaying, setIsPlaying] = useState(false);
+
+    const scrollContainerRef = useRef(null);
+    const [containerWidth, setContainerWidth] = useState(0);
+    const [isDragging, setIsDragging] = useState(false);
+    const scrollIntervalRef = useRef(null);
+
+    // Auto-scroll logic
+    useEffect(() => {
+        const handleWindowMouseMove = (e) => {
+            if (!isDragging || !scrollContainerRef.current) return;
+
+            const { clientX } = e;
+            const containerRect = scrollContainerRef.current.getBoundingClientRect();
+
+            const edgeThreshold = 100; // px from container edge to trigger scroll
+            const scrollSpeed = 20; // px per interval
+
+            // Clear existing interval
+            if (scrollIntervalRef.current) {
+                clearInterval(scrollIntervalRef.current);
+                scrollIntervalRef.current = null;
+            }
+
+            // Scroll Left if near left edge of container (or to the left of it)
+            if (clientX < containerRect.left + edgeThreshold) {
+                scrollIntervalRef.current = setInterval(() => {
+                    if (scrollContainerRef.current) {
+                        scrollContainerRef.current.scrollLeft = Math.max(0, scrollContainerRef.current.scrollLeft - scrollSpeed);
+                    }
+                }, 16);
+            }
+            // Scroll Right if near right edge of container (or to the right of it)
+            else if (clientX > containerRect.right - edgeThreshold) {
+                scrollIntervalRef.current = setInterval(() => {
+                    if (scrollContainerRef.current) {
+                        scrollContainerRef.current.scrollLeft += scrollSpeed;
+                    }
+                }, 16);
+            }
+        };
+
+        const handleWindowMouseUp = () => {
+            if (scrollIntervalRef.current) {
+                clearInterval(scrollIntervalRef.current);
+                scrollIntervalRef.current = null;
+            }
+            setIsDragging(false);
+        };
+
+        if (isDragging) {
+            window.addEventListener('mousemove', handleWindowMouseMove);
+            window.addEventListener('mouseup', handleWindowMouseUp);
+        }
+
+        return () => {
+            window.removeEventListener('mousemove', handleWindowMouseMove);
+            window.removeEventListener('mouseup', handleWindowMouseUp);
+            if (scrollIntervalRef.current) {
+                clearInterval(scrollIntervalRef.current);
+            }
+        };
+    }, [isDragging]);
+
+    const handleDragStart = () => setIsDragging(true);
+    const handleDragEnd = () => setIsDragging(false);
+
+    useEffect(() => {
+        const updateWidth = () => {
+            if (scrollContainerRef.current) {
+                setContainerWidth(scrollContainerRef.current.clientWidth);
+            }
+        };
+
+        updateWidth();
+        window.addEventListener('resize', updateWidth);
+        return () => window.removeEventListener('resize', updateWidth);
+    }, [isReviewing]); // Update when entering review mode
+
+    const getMinZoom = () => {
+        if (!duration || !containerWidth) return 10;
+        return containerWidth / duration;
+    };
+
+    const handleZoomIn = () => {
+        setZoomLevel(prev => Math.min(200, prev + 10));
+    };
+
+    const handleZoomOut = () => {
+        setZoomLevel(prev => Math.max(getMinZoom(), prev - 10));
+    };
+
+    const formatTime = (seconds) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    };
+    const pauseStartTimeRef = useRef(null);
     const mediaRecorderRef = useRef(null);
     const audioChunksRef = useRef([]);
 
@@ -36,15 +140,11 @@ const NarratorDashboard = () => {
 
         const onFeedbackUpdate = (data) => {
             // data: { userId, userName, value, timestamp }
-            // If we haven't started, ignore (should be handled by server too)
             if (!startTime) return;
 
-            // Calculate relative time in seconds, accounting for pauses
-            // If currently paused, we technically shouldn't be getting data, but if we do, map it to the "freeze" point
             let relativeTime;
 
             if (isPaused && pauseStartTimeRef.current) {
-                // If we are paused, any incoming data is effectively at the moment we paused
                 relativeTime = (pauseStartTimeRef.current - startTime - totalPausedTime) / 1000;
             } else {
                 relativeTime = (data.timestamp - startTime - totalPausedTime) / 1000;
@@ -81,20 +181,20 @@ const NarratorDashboard = () => {
             };
 
             mediaRecorderRef.current.onstop = () => {
-                const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
-                const audioUrl = URL.createObjectURL(audioBlob);
-                const a = document.createElement('a');
-                a.href = audioUrl;
-                a.download = `${sessionName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.wav`;
-                a.click();
+                const mimeType = mediaRecorderRef.current.mimeType || 'audio/webm';
+                const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+                const url = URL.createObjectURL(audioBlob);
+                setAudioUrl(url);
+                setIsReviewing(true);
+                setIsSessionStarted(false);
+                setIsPaused(false);
             };
 
             mediaRecorderRef.current.start();
 
-            // Signal server to start tracking
             socket.emit('start-session');
             setStartTime(Date.now());
-            setFeedbackData([]); // Clear previous session data
+            setFeedbackData([]);
             setIsSessionStarted(true);
             setIsPaused(false);
 
@@ -119,7 +219,6 @@ const NarratorDashboard = () => {
             socket.emit('resume-session');
             setIsPaused(false);
 
-            // Add the duration of this pause to the total
             if (pauseStartTimeRef.current) {
                 const pauseDuration = Date.now() - pauseStartTimeRef.current;
                 setTotalPausedTime(prev => prev + pauseDuration);
@@ -131,9 +230,33 @@ const NarratorDashboard = () => {
     const stopSession = () => {
         if (mediaRecorderRef.current) {
             mediaRecorderRef.current.stop();
-            setIsSessionStarted(false);
-            setIsPaused(false);
-            // We don't necessarily "stop" the session on server, but we stop recording
+        }
+    };
+
+    const handleSeek = (time) => {
+        setCurrentPlaybackTime(time);
+        if (playerRef.current) {
+            playerRef.current.seekTo(time);
+        }
+    };
+
+    const handleWaveformSeek = (time) => {
+        setCurrentPlaybackTime(time);
+    };
+
+    const handleWaveformTimeUpdate = (time) => {
+        setCurrentPlaybackTime(time);
+        if (playerRef.current) {
+            setIsPlaying(playerRef.current.isPlaying);
+        }
+    };
+
+    const downloadRecording = () => {
+        if (audioUrl) {
+            const a = document.createElement('a');
+            a.href = audioUrl;
+            a.download = `${sessionName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.wav`;
+            a.click();
         }
     };
 
@@ -173,6 +296,85 @@ const NarratorDashboard = () => {
                                 }}
                             />
                             <Button onClick={createSession} disabled={!sessionName.trim()}>Create Session</Button>
+                        </div>
+                    </Card>
+                </div>
+            ) : isReviewing ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                    <Card title="Session Review">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                            <h3 style={{ color: 'var(--primary)' }}>{sessionName} - Recording Review</h3>
+                            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                                {/* Playback Controls */}
+                                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', background: '#1e293b', padding: '0.25rem 0.5rem', borderRadius: '2rem' }}>
+                                    <button
+                                        onClick={() => playerRef.current?.playPause()}
+                                        style={{ background: isPlaying ? 'var(--warning)' : 'var(--success)', border: 'none', borderRadius: '50%', width: '32px', height: '32px', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                    >
+                                        {isPlaying ? '❚❚' : '▶'}
+                                    </button>
+                                    <span style={{ color: 'var(--text-secondary)', fontFamily: 'monospace', fontSize: '0.9rem', minWidth: '100px', textAlign: 'center' }}>
+                                        {formatTime(currentPlaybackTime)} / {formatTime(duration)}
+                                    </span>
+                                </div>
+
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#1e293b', padding: '0.25rem 0.5rem', borderRadius: '0.25rem' }}>
+                                    <span style={{ color: '#94a3b8', fontSize: '0.8rem' }}>Zoom</span>
+                                    <button onClick={handleZoomOut} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>-</button>
+                                    <span style={{ color: 'white', minWidth: '30px', textAlign: 'center' }}>{Math.round(zoomLevel)}</span>
+                                    <button onClick={handleZoomIn} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>+</button>
+                                </div>
+                                <Button onClick={downloadRecording} variant="secondary">Download Audio</Button>
+                            </div>
+                        </div>
+
+                        {/* Scrollable Container for Sync */}
+                        <div
+                            ref={scrollContainerRef}
+                            style={{
+                                width: '100%',
+                                overflowX: 'auto',
+                                background: '#0f172a',
+                                borderRadius: '0.5rem',
+                                border: '1px solid #334155',
+                                padding: '0'
+                            }}>
+                            <div style={{
+                                minWidth: '100%',
+                                width: duration ? `${Math.max(containerWidth, duration * zoomLevel)}px` : '100%',
+                                position: 'relative',
+                                display: 'flex',
+                                flexDirection: 'column'
+                            }}>
+                                {/* Synced Graph */}
+                                <div style={{ height: '200px', width: '100%', position: 'relative' }}>
+                                    <FeedbackGraph
+                                        feedbackData={feedbackData}
+                                        reviewMode={true}
+                                        playbackTime={currentPlaybackTime}
+                                        onSeek={handleSeek}
+                                        width="100%"
+                                        duration={duration}
+                                        onDragStart={handleDragStart}
+                                        onDragEnd={handleDragEnd}
+                                    />
+                                </div>
+
+                                {/* Waveform Player */}
+                                <div style={{ width: '100%', position: 'relative' }}>
+                                    <WaveformPlayer
+                                        ref={playerRef}
+                                        audioUrl={audioUrl}
+                                        zoomLevel={zoomLevel}
+                                        onTimeUpdate={handleWaveformTimeUpdate}
+                                        onSeek={handleWaveformSeek}
+                                        onReady={(d) => setDuration(d)}
+                                        onFinish={() => setIsPlaying(false)}
+                                        onDragStart={handleDragStart}
+                                        onDragEnd={handleDragEnd}
+                                    />
+                                </div>
+                            </div>
                         </div>
                     </Card>
                 </div>
@@ -222,7 +424,7 @@ const NarratorDashboard = () => {
                                             variant="secondary"
                                             style={{ borderColor: 'var(--danger)', color: 'var(--danger)' }}
                                         >
-                                            ■ Stop
+                                            ■ Stop & Review
                                         </Button>
                                     </>
                                 )}
@@ -262,7 +464,7 @@ const NarratorDashboard = () => {
                     </div>
                 </div>
             )}
-        </div>
+        </div >
     );
 };
 

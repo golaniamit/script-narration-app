@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
     Chart as ChartJS,
     CategoryScale,
@@ -24,7 +24,7 @@ ChartJS.register(
     TimeScale
 );
 
-const FeedbackGraph = ({ feedbackData }) => {
+const FeedbackGraph = ({ feedbackData, reviewMode = false, playbackTime = 0, onSeek = () => { }, width, duration, onDragStart, onDragEnd }) => {
     const [chartData, setChartData] = useState({ datasets: [] });
 
     useEffect(() => {
@@ -53,35 +53,66 @@ const FeedbackGraph = ({ feedbackData }) => {
             };
         });
 
-        setChartData({ datasets });
-    }, [feedbackData]);
+        // Add cursor dataset if in review mode
+        if (reviewMode) {
+            datasets.push({
+                label: 'Cursor',
+                data: [
+                    { x: playbackTime, y: -10 },
+                    { x: playbackTime, y: 10 }
+                ],
+                borderColor: 'white',
+                borderWidth: 2,
+                pointRadius: 0,
+                borderDash: [5, 5],
+                order: -1 // Ensure it renders on top
+            });
+        }
 
-    // Calculate sliding window
+        setChartData({ datasets });
+    }, [feedbackData, reviewMode, playbackTime]);
+
+    // Calculate sliding window or full range
     const maxTime = feedbackData.length > 0
         ? Math.max(...feedbackData.map(d => d.x))
         : 0;
 
-    // Target: Keep the head (maxTime) at the 15s mark of the 20s window (75%)
-    // So xMax should be maxTime + 5 (padding), but at least 20 initially.
-    const xMax = Math.max(20, maxTime + 5);
-    const minTime = Math.max(0, xMax - 20);
+    let minTime, xMax;
+
+    if (reviewMode) {
+        // Full timeline view
+        minTime = 0;
+        // Use duration if available, otherwise fallback to maxTime
+        xMax = duration || Math.max(maxTime, 10);
+    } else {
+        // Sliding window view
+        // Target: Keep the head (maxTime) at the 15s mark of the 20s window (75%)
+        xMax = Math.max(20, maxTime + 5);
+        minTime = Math.max(0, xMax - 20);
+    }
 
     const options = {
         responsive: true,
         maintainAspectRatio: false,
-        animation: false, // Disable animation for real-time performance
+        animation: false,
+        layout: {
+            padding: reviewMode ? 0 : 10 // Remove padding only in review mode
+        },
         scales: {
             x: {
-                type: 'linear', // Use linear scale for seconds
+                type: 'linear',
                 min: minTime,
                 max: xMax,
+                display: !reviewMode, // Show X axis in live mode
                 title: {
-                    display: true,
+                    display: !reviewMode,
                     text: 'Time (seconds)',
                     color: '#888'
                 },
                 grid: {
-                    color: '#333'
+                    display: !reviewMode,
+                    color: '#333',
+                    drawBorder: !reviewMode
                 },
                 ticks: {
                     color: '#888'
@@ -90,8 +121,11 @@ const FeedbackGraph = ({ feedbackData }) => {
             y: {
                 min: -10,
                 max: 10,
+                display: !reviewMode, // Show Y axis in live mode
                 grid: {
-                    color: '#333'
+                    display: !reviewMode,
+                    color: '#333',
+                    drawBorder: !reviewMode
                 },
                 ticks: {
                     color: '#888'
@@ -100,20 +134,75 @@ const FeedbackGraph = ({ feedbackData }) => {
         },
         plugins: {
             legend: {
-                display: true, // Show legend
+                display: !reviewMode, // Show legend in live mode
                 labels: {
-                    color: '#fff'
+                    color: '#fff',
+                    filter: (item) => item.text !== 'Cursor'
                 }
             },
             tooltip: {
+                enabled: !reviewMode, // Enable tooltip in live mode
                 mode: 'index',
-                intersect: false
+                intersect: false,
+                filter: (item) => item.dataset.label !== 'Cursor'
             }
         }
     };
 
+    // Drag to scrub logic
+    const containerRef = useRef(null);
+    const isDraggingRef = useRef(false);
+
+    const handleMouseDown = (e) => {
+        if (!reviewMode || !onSeek) return;
+        isDraggingRef.current = true;
+        if (onDragStart) onDragStart();
+        handleMouseMove(e);
+    };
+
+    const handleMouseMove = (e) => {
+        if (!isDraggingRef.current || !containerRef.current) return;
+
+        const rect = containerRef.current.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const width = rect.width;
+
+        // Calculate time based on position
+        // The graph shows [minTime, xMax]
+        const timeRange = xMax - minTime;
+        const time = minTime + (x / width) * timeRange;
+
+        onSeek(Math.max(0, Math.min(time, xMax)));
+    };
+
+    const handleMouseUp = () => {
+        isDraggingRef.current = false;
+        if (onDragEnd) onDragEnd();
+    };
+
+    useEffect(() => {
+        const handleWindowMouseMove = (e) => {
+            if (isDraggingRef.current) {
+                handleMouseMove(e);
+            }
+        };
+
+        if (reviewMode) {
+            window.addEventListener('mouseup', handleMouseUp);
+            window.addEventListener('mousemove', handleWindowMouseMove);
+            return () => {
+                window.removeEventListener('mouseup', handleMouseUp);
+                window.removeEventListener('mousemove', handleWindowMouseMove);
+            };
+        }
+    }, [reviewMode, xMax, minTime]); // Add dependencies for calculation
+
     return (
-        <div style={{ width: '100%', height: '100%' }}>
+        <div
+            ref={containerRef}
+            style={{ width: width || '100%', height: '100%', position: 'relative', cursor: reviewMode ? 'text' : 'default' }}
+            onMouseDown={handleMouseDown}
+        >
             <Line options={options} data={chartData} />
         </div>
     );

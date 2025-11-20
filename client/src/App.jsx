@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import NarratorDashboard from './pages/NarratorDashboard';
 import ListenerView from './pages/ListenerView';
+import ErrorBoundary from './components/ErrorBoundary';
 import './styles/index.css';
 
 function Home() {
@@ -14,7 +15,6 @@ function Home() {
                 <Link to="/narrator" className="btn btn-primary">
                     I am the Narrator
                 </Link>
-                {/* Listener link is usually via QR, but for dev/testing: */}
                 <Link to="/listener" className="btn" style={{ backgroundColor: 'var(--bg-card)', color: 'white' }}>
                     Join as Listener
                 </Link>
@@ -26,12 +26,16 @@ function Home() {
 function App() {
     return (
         <Router>
-            <Routes>
-                <Route path="/" element={<Home />} />
-                <Route path="/narrator" element={<NarratorDashboard />} />
-                <Route path="/listener" element={<ListenerView />} />
-                <Route path="/session/:sessionId" element={<ListenerView />} />
-            </Routes>
+            <ErrorBoundary>
+                <div className="app-container">
+                    <Routes>
+                        <Route path="/" element={<Home />} />
+                        <Route path="/narrator" element={<NarratorDashboard />} />
+                        <Route path="/listener" element={<ListenerView />} />
+                        <Route path="/session/:sessionId" element={<ListenerView />} />
+                    </Routes>
+                </div>
+            </ErrorBoundary>
         </Router>
     );
 }
