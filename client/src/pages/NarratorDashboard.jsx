@@ -260,6 +260,83 @@ const NarratorDashboard = () => {
         }
     };
 
+    const handleSaveSession = async () => {
+        if (!audioUrl) return;
+
+        try {
+            // 1. Get Audio Blob
+            const response = await fetch(audioUrl);
+            const blob = await response.blob();
+
+            // 2. Convert to Base64
+            const reader = new FileReader();
+            reader.readAsDataURL(blob);
+            reader.onloadend = () => {
+                const base64Audio = reader.result;
+
+                // 3. Create Session Object
+                const sessionData = {
+                    metadata: {
+                        name: sessionName,
+                        date: new Date().toISOString(),
+                        duration: duration
+                    },
+                    feedbackData: feedbackData,
+                    audioData: base64Audio
+                };
+
+                // 4. Download JSON
+                const jsonString = JSON.stringify(sessionData);
+                const blob = new Blob([jsonString], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${sessionName.replace(/\s+/g, '_')}_savefile.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+            };
+        } catch (e) {
+            console.error("Error saving session:", e);
+            alert("Failed to save session.");
+        }
+    };
+
+    const handleLoadSession = (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const sessionData = JSON.parse(e.target.result);
+
+                // 1. Restore Metadata
+                setSessionName(sessionData.metadata.name || "Loaded Session");
+                setDuration(sessionData.metadata.duration || 0);
+
+                // 2. Restore Feedback
+                setFeedbackData(sessionData.feedbackData || []);
+
+                // 3. Restore Audio
+                const res = await fetch(sessionData.audioData);
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                setAudioUrl(url);
+
+                // 4. Set State
+                setIsReviewing(true);
+                setIsSessionStarted(false);
+                setSessionId(null); // It's an offline review
+
+            } catch (err) {
+                console.error("Error loading session:", err);
+                alert("Invalid session file.");
+            }
+        };
+        reader.readAsText(file);
+    };
+
     return (
         <div className="container" style={{ padding: '2rem' }}>
             <header style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -296,6 +373,30 @@ const NarratorDashboard = () => {
                                 }}
                             />
                             <Button onClick={createSession} disabled={!sessionName.trim()}>Create Session</Button>
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '1rem 0', color: 'var(--text-secondary)' }}>
+                                <div style={{ flex: 1, height: '1px', background: 'var(--neutral)' }}></div>
+                                <span>OR</span>
+                                <div style={{ flex: 1, height: '1px', background: 'var(--neutral)' }}></div>
+                            </div>
+
+                            <label style={{
+                                display: 'block',
+                                textAlign: 'center',
+                                padding: '0.75rem',
+                                border: '1px dashed var(--neutral)',
+                                borderRadius: '0.5rem',
+                                cursor: 'pointer',
+                                color: 'var(--text-accent)'
+                            }}>
+                                📂 Load Saved Session
+                                <input
+                                    type="file"
+                                    accept=".json"
+                                    onChange={handleLoadSession}
+                                    style={{ display: 'none' }}
+                                />
+                            </label>
                         </div>
                     </Card>
                 </div>
@@ -324,6 +425,7 @@ const NarratorDashboard = () => {
                                     <span style={{ color: 'white', minWidth: '30px', textAlign: 'center' }}>{Math.round(zoomLevel)}</span>
                                     <button onClick={handleZoomIn} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>+</button>
                                 </div>
+                                <Button onClick={handleSaveSession} style={{ background: 'var(--primary)', border: 'none' }}>💾 Save Session</Button>
                                 <Button onClick={downloadRecording} variant="secondary">Download Audio</Button>
                             </div>
                         </div>
