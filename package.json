@@ -4,10 +4,12 @@
   "description": "Real-time script narration feedback app",
   "main": "server/index.js",
   "scripts": {
-    "start": "concurrently \"npm run server\" \"npm run client\"",
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
     "server": "cd server && nodemon index.js",
     "client": "cd client && npm run dev",
-    "install:all": "npm install && cd client && npm install && cd ../server && npm install"
+    "install:all": "npm install && cd client && npm install && cd ../server && npm install",
+    "build": "npm install && cd client && npm install && npm run build && cd ../server && npm install",
+    "start": "cd server && node index.js"
   },
   "keywords": [],
   "author": "",
