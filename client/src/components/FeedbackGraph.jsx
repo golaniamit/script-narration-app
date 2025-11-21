@@ -57,7 +57,8 @@ const FeedbackGraph = ({ feedbackData, reviewMode = false, playbackTime = 0, onS
 
         // Calculate Average Line (only in review mode and if requested)
         if (reviewMode && showAverage && feedbackData.length > 0) {
-            const activeUsers = Object.keys(groupedData).filter(uid => !visibleUserIds || visibleUserIds.has(uid));
+            // Use ALL users for average, regardless of visibility
+            const activeUsers = Object.keys(groupedData);
 
             if (activeUsers.length > 1) {
                 // Create time grid (every 200ms)

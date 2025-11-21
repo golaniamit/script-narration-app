@@ -107,6 +107,16 @@ const NarratorDashboard = () => {
         return () => window.removeEventListener('resize', updateWidth);
     }, [isReviewing]); // Update when entering review mode
 
+    // Initialize visibleUserIds when entering review mode
+    useEffect(() => {
+        if (isReviewing && feedbackData.length > 0) {
+            // Only set if empty (to preserve manual toggles if any, though usually reset on new session)
+            // Actually, for a fresh review, we want to show all.
+            // Since isReviewing flips once, this is safe.
+            setVisibleUserIds(new Set(feedbackData.map(d => d.userId)));
+        }
+    }, [isReviewing, feedbackData]);
+
     const getMinZoom = () => {
         if (!duration || !containerWidth) return 10;
         return containerWidth / duration;
