@@ -23,6 +23,10 @@ const NarratorDashboard = () => {
     const [zoomLevel, setZoomLevel] = useState(50); // Pixels per second
     const [duration, setDuration] = useState(0);
 
+    // Graph Controls
+    const [visibleUserIds, setVisibleUserIds] = useState(new Set());
+    const [showAverage, setShowAverage] = useState(true);
+
     const playerRef = useRef(null);
     const [isPlaying, setIsPlaying] = useState(false);
 
@@ -316,7 +320,12 @@ const NarratorDashboard = () => {
                 setDuration(sessionData.metadata.duration || 0);
 
                 // 2. Restore Feedback
-                setFeedbackData(sessionData.feedbackData || []);
+                const loadedFeedback = sessionData.feedbackData || [];
+                setFeedbackData(loadedFeedback);
+
+                // Initialize visible users
+                const users = new Set(loadedFeedback.map(d => d.userId));
+                setVisibleUserIds(users);
 
                 // 3. Restore Audio
                 const res = await fetch(sessionData.audioData);
@@ -327,7 +336,7 @@ const NarratorDashboard = () => {
                 // 4. Set State
                 setIsReviewing(true);
                 setIsSessionStarted(false);
-                setSessionId(null); // It's an offline review
+                setSessionId("OFFLINE_REVIEW"); // Set truthy value to bypass "Create Session" screen
 
             } catch (err) {
                 console.error("Error loading session:", err);
@@ -430,6 +439,46 @@ const NarratorDashboard = () => {
                             </div>
                         </div>
 
+                        {/* Graph Controls */}
+                        <div style={{ marginBottom: '1rem', padding: '1rem', background: '#1e293b', borderRadius: '0.5rem', display: 'flex', gap: '2rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <span style={{ color: 'var(--text-secondary)', fontWeight: 'bold', marginRight: '0.5rem' }}>Filters:</span>
+                                {Array.from(new Set(feedbackData.map(d => d.userId))).map((userId, index) => {
+                                    const userName = feedbackData.find(d => d.userId === userId)?.userName || `Listener ${index + 1}`;
+                                    const color = `hsl(${(index * 137.5) % 360}, 70%, 50%)`;
+                                    return (
+                                        <label key={userId} style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', cursor: 'pointer', color: 'white', fontSize: '0.9rem' }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={visibleUserIds.has(userId)}
+                                                onChange={(e) => {
+                                                    const newSet = new Set(visibleUserIds);
+                                                    if (e.target.checked) newSet.add(userId);
+                                                    else newSet.delete(userId);
+                                                    setVisibleUserIds(newSet);
+                                                }}
+                                            />
+                                            <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: color, display: 'inline-block' }}></span>
+                                            {userName}
+                                        </label>
+                                    );
+                                })}
+                            </div>
+
+                            {new Set(feedbackData.map(d => d.userId)).size > 1 && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderLeft: '1px solid #334155', paddingLeft: '1rem' }}>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', cursor: 'pointer', color: 'white', fontWeight: 'bold' }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={showAverage}
+                                            onChange={(e) => setShowAverage(e.target.checked)}
+                                        />
+                                        Show Average Trend
+                                    </label>
+                                </div>
+                            )}
+                        </div>
+
                         {/* Scrollable Container for Sync */}
                         <div
                             ref={scrollContainerRef}
@@ -459,6 +508,8 @@ const NarratorDashboard = () => {
                                         duration={duration}
                                         onDragStart={handleDragStart}
                                         onDragEnd={handleDragEnd}
+                                        visibleUserIds={visibleUserIds}
+                                        showAverage={showAverage}
                                     />
                                 </div>
 

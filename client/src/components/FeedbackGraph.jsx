@@ -24,7 +24,7 @@ ChartJS.register(
     TimeScale
 );
 
-const FeedbackGraph = ({ feedbackData, reviewMode = false, playbackTime = 0, onSeek = () => { }, width, duration, onDragStart, onDragEnd }) => {
+const FeedbackGraph = ({ feedbackData, reviewMode = false, playbackTime = 0, onSeek = () => { }, width, duration, onDragStart, onDragEnd, visibleUserIds, showAverage }) => {
     const [chartData, setChartData] = useState({ datasets: [] });
 
     useEffect(() => {
@@ -37,21 +37,68 @@ const FeedbackGraph = ({ feedbackData, reviewMode = false, playbackTime = 0, onS
             groupedData[item.userId].push(item);
         });
 
-        const datasets = Object.entries(groupedData).map(([userId, dataPoints], index) => {
-            // Get user name from the first data point
-            const userName = dataPoints[0]?.userName || `Listener ${index + 1}`;
-            const color = `hsl(${(index * 137.5) % 360}, 70%, 50%)`; // Golden angle approximation for distinct colors
+        const datasets = Object.entries(groupedData)
+            .filter(([userId]) => !reviewMode || !visibleUserIds || visibleUserIds.has(userId))
+            .map(([userId, dataPoints], index) => {
+                // Get user name from the first data point
+                const userName = dataPoints[0]?.userName || `Listener ${index + 1}`;
+                const color = `hsl(${(index * 137.5) % 360}, 70%, 50%)`; // Golden angle approximation for distinct colors
 
-            return {
-                label: userName,
-                data: dataPoints.map(d => ({ x: d.x, y: d.value })),
-                borderColor: color,
-                backgroundColor: color,
-                tension: 0.4,
-                pointRadius: 0, // Hide points for cleaner look
-                borderWidth: 2
-            };
-        });
+                return {
+                    label: userName,
+                    data: dataPoints.map(d => ({ x: d.x, y: d.value })),
+                    borderColor: color,
+                    backgroundColor: color,
+                    tension: 0.4,
+                    pointRadius: 0, // Hide points for cleaner look
+                    borderWidth: 2
+                };
+            });
+
+        // Calculate Average Line (only in review mode and if requested)
+        if (reviewMode && showAverage && feedbackData.length > 0) {
+            const activeUsers = Object.keys(groupedData).filter(uid => !visibleUserIds || visibleUserIds.has(uid));
+
+            if (activeUsers.length > 1) {
+                // Create time grid (every 200ms)
+                const maxTime = Math.max(...feedbackData.map(d => d.x));
+                const timeStep = 0.2;
+                const averagePoints = [];
+
+                for (let t = 0; t <= maxTime; t += timeStep) {
+                    let sum = 0;
+                    let count = 0;
+
+                    activeUsers.forEach(userId => {
+                        const userPoints = groupedData[userId];
+                        // Find the latest point at or before time t
+                        const point = userPoints.reduce((prev, curr) => {
+                            return (curr.x <= t && curr.x > (prev?.x || -1)) ? curr : prev;
+                        }, null);
+
+                        if (point) {
+                            sum += point.value;
+                            count++;
+                        }
+                    });
+
+                    if (count > 0) {
+                        averagePoints.push({ x: t, y: sum / count });
+                    }
+                }
+
+                datasets.push({
+                    label: 'Average',
+                    data: averagePoints,
+                    borderColor: 'white',
+                    backgroundColor: 'white',
+                    borderWidth: 4,
+                    pointRadius: 0,
+                    tension: 0.4,
+                    order: -2 // Topmost
+                });
+            }
+        }
 
         // Add cursor dataset if in review mode
         if (reviewMode) {
@@ -70,7 +117,7 @@ const FeedbackGraph = ({ feedbackData, reviewMode = false, playbackTime = 0, onS
         }
 
         setChartData({ datasets });
-    }, [feedbackData, reviewMode, playbackTime]);
+    }, [feedbackData, reviewMode, playbackTime, visibleUserIds, showAverage]);
 
     // Calculate sliding window or full range
     const maxTime = feedbackData.length > 0
