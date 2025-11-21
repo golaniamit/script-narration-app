@@ -139,6 +139,13 @@ const NarratorDashboard = () => {
     const mediaRecorderRef = useRef(null);
     const audioChunksRef = useRef([]);
 
+    // Graph Polish Refs
+    const lastFeedbackTimeRef = useRef({});
+    const lastFeedbackValueRef = useRef({});
+    const listenersRef = useRef([]); // Keep track of listeners for heartbeat
+
+    // Connection Lifecycle
+
     // Connection Lifecycle
     useEffect(() => {
         socket.connect();
@@ -150,7 +157,10 @@ const NarratorDashboard = () => {
     // Event Listeners
     useEffect(() => {
         const onSessionCreated = (id) => setSessionId(id);
-        const onListenerUpdate = (userList) => setListeners(userList);
+        const onListenerUpdate = (userList) => {
+            setListeners(userList);
+            listenersRef.current = userList;
+        };
 
         const onFeedbackUpdate = (data) => {
             // data: { userId, userName, value, timestamp }
@@ -164,7 +174,24 @@ const NarratorDashboard = () => {
                 relativeTime = (data.timestamp - startTime - totalPausedTime) / 1000;
             }
 
-            setFeedbackData(prev => [...prev, { ...data, x: relativeTime }]);
+            setFeedbackData(prev => {
+                const newData = [...prev];
+
+                // Fix Start Gap: If first point and late, backfill 0 at t=0
+                if (!lastFeedbackTimeRef.current[data.userId] && relativeTime > 0.1) {
+                    newData.push({ ...data, x: 0, value: 0 });
+                }
+
+                newData.push({ ...data, x: relativeTime });
+                return newData;
+            });
+
+            // Update Refs
+            lastFeedbackTimeRef.current[data.userId] = Date.now();
+            lastFeedbackValueRef.current[data.userId] = {
+                value: data.value,
+                userName: data.userName
+            };
         };
 
         socket.on('session-created', onSessionCreated);
@@ -177,6 +204,45 @@ const NarratorDashboard = () => {
             socket.off('feedback-update', onFeedbackUpdate);
         };
     }, [startTime, totalPausedTime, isPaused]);
+
+    // Heartbeat for Fluid Graph (fills in gaps when value is constant)
+    useEffect(() => {
+        if (!isSessionStarted || isPaused) return;
+
+        const interval = setInterval(() => {
+            const now = Date.now();
+
+            // Check all active listeners who have sent data at least once
+            Object.entries(lastFeedbackTimeRef.current).forEach(([userId, lastTime]) => {
+                // If no update for > 150ms (allow slight buffer over 100ms interval)
+                if (now - lastTime > 150) {
+                    const lastData = lastFeedbackValueRef.current[userId];
+                    if (!lastData) return;
+
+                    let relativeTime;
+                    if (isPaused && pauseStartTimeRef.current) {
+                        relativeTime = (pauseStartTimeRef.current - startTime - totalPausedTime) / 1000;
+                    } else {
+                        relativeTime = (now - startTime - totalPausedTime) / 1000;
+                    }
+
+                    // Add a "heartbeat" point
+                    setFeedbackData(prev => [...prev, {
+                        userId,
+                        userName: lastData.userName,
+                        value: lastData.value,
+                        x: relativeTime,
+                        timestamp: now
+                    }]);
+
+                    // Update last time so we don't spam (wait another cycle)
+                    lastFeedbackTimeRef.current[userId] = now;
+                }
+            });
+        }, 100);
+
+        return () => clearInterval(interval);
+    }, [isSessionStarted, isPaused, startTime, totalPausedTime]);
 
     const createSession = () => {
         if (!sessionName.trim()) return;
