@@ -134,8 +134,8 @@ const FeedbackGraph = ({ feedbackData, reviewMode = false, playbackTime = 0, onS
         xMax = duration || Math.max(maxTime, 10);
     } else {
         // Sliding window view
-        // Target: Keep the head (maxTime) at the 15s mark of the 20s window (75%)
-        xMax = Math.max(20, maxTime + 5);
+        // Target: Keep the head (maxTime) at the right edge (100%)
+        xMax = Math.max(20, maxTime);
         minTime = Math.max(0, xMax - 20);
     }
 
@@ -166,7 +166,8 @@ const FeedbackGraph = ({ feedbackData, reviewMode = false, playbackTime = 0, onS
                     const ticks = [];
                     // Ensure we cover the entire visible range plus a bit of buffer
                     const start = Math.floor(axis.min / 5) * 5;
-                    const end = Math.ceil(axis.max / 5) * 5;
+                    // STRICTLY cap ticks at axis.max so future ticks don't appear early
+                    const end = axis.max;
 
                     for (let i = start; i <= end; i += 5) {
                         ticks.push({ value: i });
