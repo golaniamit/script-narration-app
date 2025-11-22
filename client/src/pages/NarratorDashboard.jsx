@@ -709,6 +709,37 @@ const NarratorDashboard = () => {
                             </>
                         )}
                     </div>
+
+                    {!isReviewing && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                            <Card title="Join Session">
+                                <div style={{ background: 'white', padding: '1rem', borderRadius: '0.5rem', display: 'flex', justifyContent: 'center' }}>
+                                    <QRCodeSVG value={`${window.location.origin}/session/${sessionId}`} size={200} />
+                                </div>
+                                <div style={{ marginTop: '1rem', textAlign: 'center' }}>
+                                    <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Scan to join or enter code:</p>
+                                    <p style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--primary)', letterSpacing: '2px', margin: '0.5rem 0' }}>
+                                        {sessionId}
+                                    </p>
+                                </div>
+                            </Card>
+
+                            <Card title="Joined Listeners">
+                                {listeners.length === 0 ? (
+                                    <p style={{ color: 'var(--text-secondary)', fontStyle: 'italic' }}>No listeners yet...</p>
+                                ) : (
+                                    <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                        {listeners.map((user) => (
+                                            <li key={user.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--success)' }}></span>
+                                                {user.name}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
+                            </Card>
+                        </div>
+                    )}
                 </div >
             )}
         </div >
