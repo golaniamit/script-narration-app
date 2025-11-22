@@ -144,7 +144,12 @@ const FeedbackGraph = ({ feedbackData, reviewMode = false, playbackTime = 0, onS
         maintainAspectRatio: false,
         animation: false,
         layout: {
-            padding: reviewMode ? 0 : 10 // Remove padding only in review mode
+            padding: {
+                left: reviewMode ? 0 : 10,
+                right: reviewMode ? 20 : 10, // Add right padding to match waveform and accommodate labels
+                top: reviewMode ? 0 : 10,
+                bottom: reviewMode ? 0 : 10
+            }
         },
         scales: {
             x: {
