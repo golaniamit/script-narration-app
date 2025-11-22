@@ -162,9 +162,19 @@ const FeedbackGraph = ({ feedbackData, reviewMode = false, playbackTime = 0, onS
                     color: '#333',
                     drawBorder: !reviewMode
                 },
+                afterBuildTicks: (axis) => {
+                    const ticks = [];
+                    // Ensure we cover the entire visible range plus a bit of buffer
+                    const start = Math.floor(axis.min / 5) * 5;
+                    const end = Math.ceil(axis.max / 5) * 5;
+
+                    for (let i = start; i <= end; i += 5) {
+                        ticks.push({ value: i });
+                    }
+                    axis.ticks = ticks;
+                },
                 ticks: {
                     color: '#888',
-                    stepSize: 5,
                     maxRotation: 0,
                     autoSkip: false,
                     includeBounds: false // Prevent ticks at min/max edges
