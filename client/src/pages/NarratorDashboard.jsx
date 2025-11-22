@@ -315,6 +315,12 @@ const NarratorDashboard = () => {
         }
     };
 
+    const togglePlayback = () => {
+        if (playerRef.current) {
+            playerRef.current.playPause();
+        }
+    };
+
     const handleSeek = (time) => {
         setCurrentPlaybackTime(time);
         if (playerRef.current) {
@@ -424,6 +430,25 @@ const NarratorDashboard = () => {
         reader.readAsText(file);
     };
 
+
+
+    // Auto-scroll logic
+    useEffect(() => {
+        if (isPlaying && scrollContainerRef.current) {
+            const container = scrollContainerRef.current;
+            // Calculate cursor position in pixels (40px offset for Y-axis/padding + time * zoom)
+            const cursorPixel = 40 + (currentPlaybackTime * zoomLevel);
+            const halfWidth = container.clientWidth / 2;
+
+            // Scroll to keep cursor centered, but don't scroll past start
+            if (cursorPixel > halfWidth) {
+                container.scrollLeft = cursorPixel - halfWidth;
+            } else {
+                container.scrollLeft = 0;
+            }
+        }
+    }, [currentPlaybackTime, isPlaying, zoomLevel]);
+
     return (
         <div className="container" style={{ padding: '2rem' }}>
             <header style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -456,7 +481,7 @@ const NarratorDashboard = () => {
                                     borderRadius: '0.5rem',
                                     border: '1px solid var(--neutral)',
                                     background: 'var(--bg-primary)',
-                                    color: 'white'
+                                    width: '100%'
                                 }}
                             />
                             <Button onClick={createSession} disabled={!sessionName.trim()}>Create Session</Button>
@@ -487,182 +512,186 @@ const NarratorDashboard = () => {
                         </div>
                     </Card>
                 </div>
-            ) : isReviewing ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-                    <Card title="Session Review">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                            <h3 style={{ color: 'var(--primary)' }}>{sessionName} - Recording Review</h3>
-                            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                                {/* Playback Controls */}
-                                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', background: '#1e293b', padding: '0.25rem 0.5rem', borderRadius: '2rem' }}>
-                                    <button
-                                        onClick={() => playerRef.current?.playPause()}
-                                        style={{ background: isPlaying ? 'var(--warning)' : 'var(--success)', border: 'none', borderRadius: '50%', width: '32px', height: '32px', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                    >
-                                        {isPlaying ? '❚❚' : '▶'}
-                                    </button>
-                                    <span style={{ color: 'var(--text-secondary)', fontFamily: 'monospace', fontSize: '0.9rem', minWidth: '100px', textAlign: 'center' }}>
-                                        {formatTime(currentPlaybackTime)} / {formatTime(duration)}
-                                    </span>
-                                </div>
-
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#1e293b', padding: '0.25rem 0.5rem', borderRadius: '0.25rem' }}>
-                                    <span style={{ color: '#94a3b8', fontSize: '0.8rem' }}>Zoom</span>
-                                    <button onClick={handleZoomOut} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>-</button>
-                                    <span style={{ color: 'white', minWidth: '30px', textAlign: 'center' }}>{Math.round(zoomLevel)}</span>
-                                    <button onClick={handleZoomIn} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>+</button>
-                                </div>
-                                <Button onClick={handleSaveSession} style={{ background: 'var(--primary)', border: 'none' }}>💾 Save Session</Button>
-                                <Button onClick={downloadRecording} variant="secondary">Download Audio</Button>
-                            </div>
-                        </div>
-
-                        {/* Graph Controls */}
-                        <div style={{ marginBottom: '1rem', padding: '1rem', background: '#1e293b', borderRadius: '0.5rem', display: 'flex', gap: '2rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                <span style={{ color: 'var(--text-secondary)', fontWeight: 'bold', marginRight: '0.5rem' }}>Filters:</span>
-                                {Array.from(new Set(feedbackData.map(d => d.userId))).map((userId, index) => {
-                                    const userName = feedbackData.find(d => d.userId === userId)?.userName || `Listener ${index + 1}`;
-                                    const color = `hsl(${(index * 137.5) % 360}, 70%, 50%)`;
-                                    return (
-                                        <label key={userId} style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', cursor: 'pointer', color: 'white', fontSize: '0.9rem' }}>
-                                            <input
-                                                type="checkbox"
-                                                checked={visibleUserIds.has(userId)}
-                                                onChange={(e) => {
-                                                    const newSet = new Set(visibleUserIds);
-                                                    if (e.target.checked) newSet.add(userId);
-                                                    else newSet.delete(userId);
-                                                    setVisibleUserIds(newSet);
-                                                }}
-                                            />
-                                            <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: color, display: 'inline-block' }}></span>
-                                            {userName}
-                                        </label>
-                                    );
-                                })}
-                            </div>
-
-                            {new Set(feedbackData.map(d => d.userId)).size > 1 && (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderLeft: '1px solid #334155', paddingLeft: '1rem' }}>
-                                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', cursor: 'pointer', color: 'white', fontWeight: 'bold' }}>
-                                        <input
-                                            type="checkbox"
-                                            checked={showAverage}
-                                            onChange={(e) => setShowAverage(e.target.checked)}
-                                        />
-                                        Show Average Trend
-                                    </label>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Scrollable Container for Sync */}
-                        <div
-                            ref={scrollContainerRef}
-                            style={{
-                                width: '100%',
-                                overflowX: 'auto',
-                                background: '#0f172a',
-                                borderRadius: '0.5rem',
-                                border: '1px solid #334155',
-                                padding: '0'
-                            }}>
-                            <div style={{
-                                minWidth: '100%',
-                                width: duration ? `${Math.max(containerWidth, duration * zoomLevel)}px` : '100%',
-                                position: 'relative',
-                                display: 'flex',
-                                flexDirection: 'column'
-                            }}>
-                                {/* Synced Graph */}
-                                <div style={{ height: '200px', width: '100%', position: 'relative' }}>
-                                    <FeedbackGraph
-                                        feedbackData={feedbackData}
-                                        reviewMode={true}
-                                        playbackTime={currentPlaybackTime}
-                                        onSeek={handleSeek}
-                                        width="100%"
-                                        duration={duration}
-                                        onDragStart={handleDragStart}
-                                        onDragEnd={handleDragEnd}
-                                        visibleUserIds={visibleUserIds}
-                                        showAverage={showAverage}
-                                    />
-                                </div>
-
-                                {/* Waveform Player */}
-                                <div style={{ width: '100%', position: 'relative', paddingLeft: '40px', paddingRight: '20px', boxSizing: 'border-box' }}>
-                                    <WaveformPlayer
-                                        ref={playerRef}
-                                        audioUrl={audioUrl}
-                                        zoomLevel={zoomLevel}
-                                        onTimeUpdate={handleWaveformTimeUpdate}
-                                        onSeek={handleWaveformSeek}
-                                        onReady={(d) => setDuration(d)}
-                                        onFinish={() => setIsPlaying(false)}
-                                        onDragStart={handleDragStart}
-                                        onDragEnd={handleDragEnd}
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    </Card>
-                </div>
             ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: '2rem' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-                        <Card title="Live Feedback">
-                            <div style={{ height: '400px', width: '100%', position: 'relative' }}>
-                                <FeedbackGraph feedbackData={feedbackData} />
-                            </div>
-                        </Card>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem', minWidth: 0 }}>
+                        {isReviewing ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                                <Card title="Session Review">
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                                        <h3 style={{ margin: 0 }}>{sessionName} - Recording Review</h3>
+                                        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#1e293b', padding: '0.25rem 0.5rem', borderRadius: '2rem' }}>
+                                                <button
+                                                    onClick={togglePlayback}
+                                                    style={{ background: isPlaying ? 'var(--warning)' : 'var(--success)', border: 'none', borderRadius: '50%', width: '32px', height: '32px', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                                >
+                                                    {isPlaying ? '❚❚' : '▶'}
+                                                </button>
+                                                <span style={{ color: 'var(--text-secondary)', fontFamily: 'monospace', fontSize: '0.9rem', minWidth: '100px', textAlign: 'center' }}>
+                                                    {formatTime(currentPlaybackTime)} / {formatTime(duration)}
+                                                </span>
+                                            </div>
 
-                        <Card title="Controls">
-                            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                                {!isSessionStarted ? (
-                                    <Button onClick={startSession}>Start Session & Recording</Button>
-                                ) : (
-                                    <>
-                                        {!isPaused ? (
-                                            <Button
-                                                onClick={pauseSession}
-                                                style={{
-                                                    backgroundColor: 'var(--warning)',
-                                                    color: 'black',
-                                                    border: 'none',
-                                                    fontWeight: 'bold'
-                                                }}
-                                            >
-                                                ❚❚ Pause
-                                            </Button>
-                                        ) : (
-                                            <Button
-                                                onClick={resumeSession}
-                                                style={{
-                                                    backgroundColor: 'var(--success)',
-                                                    color: 'white',
-                                                    border: 'none',
-                                                    fontWeight: 'bold'
-                                                }}
-                                            >
-                                                ▶ Resume
-                                            </Button>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#1e293b', padding: '0.25rem 0.5rem', borderRadius: '0.25rem' }}>
+                                                <span style={{ color: '#94a3b8', fontSize: '0.8rem' }}>Zoom</span>
+                                                <button onClick={handleZoomOut} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>-</button>
+                                                <span style={{ color: 'white', minWidth: '30px', textAlign: 'center' }}>{Math.round(zoomLevel)}</span>
+                                                <button onClick={handleZoomIn} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>+</button>
+                                            </div>
+                                            <Button onClick={handleSaveSession} style={{ background: 'var(--primary)', border: 'none' }}>💾 Save Session</Button>
+                                            <Button onClick={downloadRecording} variant="secondary">Download Audio</Button>
+                                        </div>
+                                    </div>
+
+                                    {/* Graph Controls */}
+                                    <div style={{ marginBottom: '1rem', padding: '1rem', background: '#1e293b', borderRadius: '0.5rem', display: 'flex', gap: '2rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                            <span style={{ color: 'var(--text-secondary)', fontWeight: 'bold', marginRight: '0.5rem' }}>Filters:</span>
+                                            {Array.from(new Set(feedbackData.map(d => d.userId))).map((userId, index) => {
+                                                const userName = feedbackData.find(d => d.userId === userId)?.userName || `Listener ${index + 1}`;
+                                                const color = `hsl(${(index * 137.5) % 360}, 70%, 50%)`;
+                                                return (
+                                                    <label key={userId} style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', cursor: 'pointer', color: 'white', fontSize: '0.9rem' }}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={visibleUserIds.has(userId)}
+                                                            onChange={(e) => {
+                                                                const newSet = new Set(visibleUserIds);
+                                                                if (e.target.checked) newSet.add(userId);
+                                                                else newSet.delete(userId);
+                                                                setVisibleUserIds(newSet);
+                                                            }}
+                                                        />
+                                                        <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: color, display: 'inline-block' }}></span>
+                                                        {userName}
+                                                    </label>
+                                                );
+                                            })}
+                                        </div>
+
+                                        {new Set(feedbackData.map(d => d.userId)).size > 1 && (
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderLeft: '1px solid #334155', paddingLeft: '1rem' }}>
+                                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', cursor: 'pointer', color: 'white', fontWeight: 'bold' }}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={showAverage}
+                                                        onChange={(e) => setShowAverage(e.target.checked)}
+                                                    />
+                                                    Show Average Trend
+                                                </label>
+                                            </div>
                                         )}
+                                    </div>
 
-                                        <Button
-                                            onClick={stopSession}
-                                            variant="secondary"
-                                            style={{ borderColor: 'var(--danger)', color: 'var(--danger)' }}
-                                        >
-                                            ■ Stop & Review
-                                        </Button>
-                                    </>
-                                )}
-                                {isSessionStarted && !isPaused && <span className="animate-fade-in" style={{ color: 'var(--danger)', fontWeight: 'bold' }}>● REC</span>}
-                                {isPaused && <span style={{ color: 'var(--warning)', fontWeight: 'bold' }}>❚❚ PAUSED</span>}
+                                    {/* Scrollable Container for Sync */}
+                                    <div
+                                        ref={scrollContainerRef}
+                                        style={{
+                                            width: '100%',
+                                            overflowX: 'auto',
+                                            background: '#0f172a',
+                                            borderRadius: '0.5rem',
+                                            border: '1px solid #334155',
+                                            padding: '0'
+                                        }}>
+                                        <div style={{
+                                            minWidth: '100%',
+                                            // Fix: Add 60px to width to account for Graph padding (40px Left Axis + 20px Right Padding)
+                                            width: duration ? `${Math.max(containerWidth, (duration * zoomLevel) + 60)}px` : '100%',
+                                            position: 'relative',
+                                            display: 'flex',
+                                            flexDirection: 'column'
+                                        }}>
+                                            {/* Synced Graph */}
+                                            <div style={{ height: '200px', width: '100%', position: 'relative' }}>
+                                                <FeedbackGraph
+                                                    feedbackData={feedbackData}
+                                                    reviewMode={true}
+                                                    playbackTime={currentPlaybackTime}
+                                                    onSeek={handleSeek}
+                                                    width="100%"
+                                                    duration={duration}
+                                                    onDragStart={handleDragStart}
+                                                    onDragEnd={handleDragEnd}
+                                                    visibleUserIds={visibleUserIds}
+                                                    showAverage={showAverage}
+                                                />
+                                            </div>
+
+                                            {/* Waveform Player */}
+                                            <div style={{ width: '100%', position: 'relative', paddingLeft: '40px', paddingRight: '20px', boxSizing: 'border-box' }}>
+                                                <WaveformPlayer
+                                                    ref={playerRef}
+                                                    audioUrl={audioUrl}
+                                                    zoomLevel={zoomLevel}
+                                                    onTimeUpdate={handleWaveformTimeUpdate}
+                                                    onSeek={handleWaveformSeek}
+                                                    onReady={(d) => setDuration(d)}
+                                                    onFinish={() => setIsPlaying(false)}
+                                                    onDragStart={handleDragStart}
+                                                    onDragEnd={handleDragEnd}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </Card>
                             </div>
-                        </Card>
+                        ) : (
+                            <>
+                                <Card title="Live Feedback">
+                                    <div style={{ height: '400px', width: '100%', position: 'relative' }}>
+                                        <FeedbackGraph feedbackData={feedbackData} />
+                                    </div>
+                                </Card>
+
+                                <Card title="Controls">
+                                    <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                                        {!isSessionStarted ? (
+                                            <Button onClick={startSession}>Start Session & Recording</Button>
+                                        ) : (
+                                            <>
+                                                {!isPaused ? (
+                                                    <Button
+                                                        onClick={pauseSession}
+                                                        style={{
+                                                            backgroundColor: 'var(--warning)',
+                                                            color: 'black',
+                                                            border: 'none',
+                                                            fontWeight: 'bold'
+                                                        }}
+                                                    >
+                                                        ❚❚ Pause
+                                                    </Button>
+                                                ) : (
+                                                    <Button
+                                                        onClick={resumeSession}
+                                                        style={{
+                                                            backgroundColor: 'var(--success)',
+                                                            color: 'white',
+                                                            border: 'none',
+                                                            fontWeight: 'bold'
+                                                        }}
+                                                    >
+                                                        ▶ Resume
+                                                    </Button>
+                                                )}
+
+                                                <Button
+                                                    onClick={stopSession}
+                                                    variant="secondary"
+                                                    style={{ borderColor: 'var(--danger)', color: 'var(--danger)' }}
+                                                >
+                                                    ■ Stop & Review
+                                                </Button>
+                                            </>
+                                        )}
+                                        {isSessionStarted && !isPaused && <span className="animate-fade-in" style={{ color: 'var(--danger)', fontWeight: 'bold' }}>● REC</span>}
+                                        {isPaused && <span style={{ color: 'var(--warning)', fontWeight: 'bold' }}>❚❚ PAUSED</span>}
+                                    </div>
+                                </Card>
+                            </>
+                        )}
                     </div>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
@@ -692,8 +721,8 @@ const NarratorDashboard = () => {
                                 </ul>
                             )}
                         </Card>
-                    </div>
-                </div>
+                    </div >
+                </div >
             )}
         </div >
     );
