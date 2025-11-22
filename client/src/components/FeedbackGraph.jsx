@@ -185,6 +185,9 @@ const FeedbackGraph = ({ feedbackData, reviewMode = false, playbackTime = 0, onS
                 min: -10,
                 max: 10,
                 display: !reviewMode, // Show Y axis in live mode
+                afterFit: (scale) => {
+                    scale.width = 40; // Force fixed width to prevent jitter
+                },
                 grid: {
                     display: !reviewMode,
                     color: '#333',
