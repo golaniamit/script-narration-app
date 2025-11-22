@@ -163,7 +163,10 @@ const FeedbackGraph = ({ feedbackData, reviewMode = false, playbackTime = 0, onS
                     drawBorder: !reviewMode
                 },
                 ticks: {
-                    color: '#888'
+                    color: '#888',
+                    stepSize: 5,
+                    maxRotation: 0,
+                    autoSkip: false
                 }
             },
             y: {
