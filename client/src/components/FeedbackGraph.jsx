@@ -178,7 +178,17 @@ const FeedbackGraph = ({ feedbackData, reviewMode = false, playbackTime = 0, onS
                     color: '#888',
                     maxRotation: 0,
                     autoSkip: false,
-                    includeBounds: false // Prevent ticks at min/max edges
+                    includeBounds: false, // Prevent ticks at min/max edges
+                    callback: function (value) {
+                        // Hide ticks that are too close to the left edge (minTime)
+                        // This prevents them from pushing the Y-axis or causing jitter
+                        // 'this.chart.scales.x.min' might not be updated yet, so use the prop 'minTime'
+                        // But we don't have access to props here easily without closure.
+                        // Fortunately, 'this' context usually has access to the scale.
+                        const min = this.chart.scales.x.min;
+                        if (value < min + 1) return null; // Hide if within 1s of the left edge
+                        return value;
+                    }
                 }
             },
             y: {
