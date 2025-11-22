@@ -166,12 +166,14 @@ const NarratorDashboard = () => {
             // data: { userId, userName, value, timestamp }
             if (!startTime) return;
 
+            const now = Date.now();
             let relativeTime;
 
             if (isPaused && pauseStartTimeRef.current) {
                 relativeTime = (pauseStartTimeRef.current - startTime - totalPausedTime) / 1000;
             } else {
-                relativeTime = (data.timestamp - startTime - totalPausedTime) / 1000;
+                // Use arrival time (now) instead of sender time (data.timestamp) to avoid clock skew
+                relativeTime = (now - startTime - totalPausedTime) / 1000;
             }
 
             setFeedbackData(prev => {
