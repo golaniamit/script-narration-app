@@ -434,20 +434,36 @@ const NarratorDashboard = () => {
 
     // Auto-scroll logic
     useEffect(() => {
-        if (isPlaying && scrollContainerRef.current) {
+        if (isPlaying && scrollContainerRef.current && !isDragging) {
             const container = scrollContainerRef.current;
             // Calculate cursor position in pixels (40px offset for Y-axis/padding + time * zoom)
             const cursorPixel = 40 + (currentPlaybackTime * zoomLevel);
-            const halfWidth = container.clientWidth / 2;
+            const containerWidth = container.clientWidth;
 
-            // Scroll to keep cursor centered, but don't scroll past start
-            if (cursorPixel > halfWidth) {
-                container.scrollLeft = cursorPixel - halfWidth;
+            // Target position: Keep cursor at ~80% of the viewport width (right side)
+            // This allows the user to see more history (left) and less future (right)
+            // ScrollLeft = CursorPixel - (ContainerWidth * 0.8)
+            const targetScrollLeft = cursorPixel - (containerWidth * 0.8);
+
+            // Only scroll if we need to move forward (don't scroll back to 0 if cursor is at start)
+            // But we do want to follow it if it loops or seeks back?
+            // "remain wherever user leaves it" -> If user scrolled manually, we might be fighting them.
+            // But "just before the right edge" implies a follow mode.
+            // Let's just apply the targetScrollLeft, clamped to 0.
+
+            if (targetScrollLeft > 0) {
+                container.scrollLeft = targetScrollLeft;
             } else {
-                container.scrollLeft = 0;
+                // If cursor is in the first 80% of the screen, ensure we are at 0
+                // But only if we are actually playing from start.
+                // If we are just scrubbing, isPlaying might be false.
+                // If playing, we want to ensure visibility.
+                if (container.scrollLeft > cursorPixel) {
+                    container.scrollLeft = 0;
+                }
             }
         }
-    }, [currentPlaybackTime, isPlaying, zoomLevel]);
+    }, [currentPlaybackTime, isPlaying, zoomLevel, isDragging]);
 
     return (
         <div className="container" style={{ padding: '2rem' }}>
@@ -513,7 +529,7 @@ const NarratorDashboard = () => {
                     </Card>
                 </div>
             ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: '2rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: isReviewing ? '1fr' : '1fr 300px', gap: '2rem' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem', minWidth: 0 }}>
                         {isReviewing ? (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
@@ -693,35 +709,6 @@ const NarratorDashboard = () => {
                             </>
                         )}
                     </div>
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-                        <Card title="Join Session">
-                            <div style={{ background: 'white', padding: '1rem', borderRadius: '0.5rem', display: 'flex', justifyContent: 'center' }}>
-                                <QRCodeSVG value={`${window.location.origin}/session/${sessionId}`} size={200} />
-                            </div>
-                            <div style={{ marginTop: '1rem', textAlign: 'center' }}>
-                                <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Scan to join or enter code:</p>
-                                <p style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--primary)', letterSpacing: '2px', margin: '0.5rem 0' }}>
-                                    {sessionId}
-                                </p>
-                            </div>
-                        </Card>
-
-                        <Card title="Joined Listeners">
-                            {listeners.length === 0 ? (
-                                <p style={{ color: 'var(--text-secondary)', fontStyle: 'italic' }}>No listeners yet...</p>
-                            ) : (
-                                <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                    {listeners.map((user) => (
-                                        <li key={user.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--success)' }}></span>
-                                            {user.name}
-                                        </li>
-                                    ))}
-                                </ul>
-                            )}
-                        </Card>
-                    </div >
                 </div >
             )}
         </div >
