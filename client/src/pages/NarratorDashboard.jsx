@@ -592,7 +592,7 @@ const NarratorDashboard = () => {
                                 </div>
 
                                 {/* Waveform Player */}
-                                <div style={{ width: '100%', position: 'relative' }}>
+                                <div style={{ width: '100%', position: 'relative', paddingLeft: '40px', boxSizing: 'border-box' }}>
                                     <WaveformPlayer
                                         ref={playerRef}
                                         audioUrl={audioUrl}
