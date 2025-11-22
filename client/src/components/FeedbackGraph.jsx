@@ -166,7 +166,13 @@ const FeedbackGraph = ({ feedbackData, reviewMode = false, playbackTime = 0, onS
                     color: '#888',
                     stepSize: 5,
                     maxRotation: 0,
-                    autoSkip: false
+                    autoSkip: false,
+                    includeBounds: false, // Prevent ticks at min/max edges
+                    callback: function (value) {
+                        // Only show multiples of 5
+                        if (value % 5 === 0) return value;
+                        return null;
+                    }
                 }
             },
             y: {
