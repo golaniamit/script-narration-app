@@ -440,10 +440,10 @@ const NarratorDashboard = () => {
             const cursorPixel = 40 + (currentPlaybackTime * zoomLevel);
             const containerWidth = container.clientWidth;
 
-            // Target position: Keep cursor at ~80% of the viewport width (right side)
+            // Target position: Keep cursor at ~95% of the viewport width (right side)
             // This allows the user to see more history (left) and less future (right)
-            // ScrollLeft = CursorPixel - (ContainerWidth * 0.8)
-            const targetScrollLeft = cursorPixel - (containerWidth * 0.8);
+            // ScrollLeft = CursorPixel - (ContainerWidth * 0.95)
+            const targetScrollLeft = cursorPixel - (containerWidth * 0.95);
 
             // Only scroll if we need to move forward (don't scroll back to 0 if cursor is at start)
             // But we do want to follow it if it loops or seeks back?
@@ -454,7 +454,7 @@ const NarratorDashboard = () => {
             if (targetScrollLeft > 0) {
                 container.scrollLeft = targetScrollLeft;
             } else {
-                // If cursor is in the first 80% of the screen, ensure we are at 0
+                // If cursor is in the first 95% of the screen, ensure we are at 0
                 // But only if we are actually playing from start.
                 // If we are just scrubbing, isPlaying might be false.
                 // If playing, we want to ensure visibility.
@@ -497,7 +497,8 @@ const NarratorDashboard = () => {
                                     borderRadius: '0.5rem',
                                     border: '1px solid var(--neutral)',
                                     background: 'var(--bg-primary)',
-                                    width: '100%'
+                                    width: '100%',
+                                    color: 'white'
                                 }}
                             />
                             <Button onClick={createSession} disabled={!sessionName.trim()}>Create Session</Button>
